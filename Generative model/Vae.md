@@ -47,4 +47,61 @@ $$
 
 
 
+训练过程
+
+\begin{enumerate}
+    \item \textbf{前向传播：}
+        \begin{itemize}
+            \item 输入数据 $x \rightarrow$ 编码器输出 $\mu, \sigma \rightarrow$ 采样 $z \rightarrow$ 解码器生成 $x'$。
+        \end{itemize}
+    
+    \item \textbf{损失函数：}
+        $$
+        \mathcal{L}(\theta, \phi) = -\text{ELBO} = \text{重建损失} + \text{KL散度}
+        $$
+        \begin{itemize}
+            \item 重建损失：例如二元交叉熵（图像生成）或均方误差。
+            \item KL散度：闭合解为 $-\frac{1}{2} \sum (1 + \log \sigma^2 - \mu^2 - \sigma^2)$。
+        \end{itemize}
+    
+    \item \textbf{反向传播：} 通过重参数化技巧计算梯度，更新编码器和解码器参数。
+\end{enumerate}
+
+## 代码
+class VAE(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # 编码器
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, latent_dim * 2)  # 输出μ和logσ²
+        )
+        # 解码器
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, input_dim),
+            nn.Sigmoid()  # 假设输入数据在[0,1]
+        )
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, x):
+        # 编码
+        h = self.encoder(x)
+        mu, logvar = h.chunk(2, dim=-1)
+        z = self.reparameterize(mu, logvar)
+        # 解码
+        x_recon = self.decoder(z)
+        return x_recon, mu, logvar
+
+# 损失函数
+def loss_function(x_recon, x, mu, logvar):
+    recon_loss = F.binary_cross_entropy(x_recon, x, reduction='sum')
+    kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    return recon_loss + kl_loss
 
